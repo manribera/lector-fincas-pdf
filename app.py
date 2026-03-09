@@ -57,17 +57,6 @@ def normalizar_para_busqueda(texto: str) -> str:
     t = t.replace("|", " ")
     t = re.sub(r"[ \t]+", " ", t)
     t = re.sub(r"\n+", "\n", t)
-
-    reemplazos = {
-        "INSCRIPCION": "INSCRIPCIÓN",
-        "CEDULA": "CÉDULA",
-        "ADQUISITIVA": "ADQUISITIVA",
-        "ANTECEDENTES DOMINIO DE LA FINCA": "ANTECEDENTES DOMINIO DE LA FINCA",
-    }
-
-    for a, b in reemplazos.items():
-        t = t.replace(a, b)
-
     return t.strip()
 
 
@@ -96,54 +85,102 @@ def buscar_primero(texto: str, patrones: list[str]) -> str:
 def extraer_bloque(texto: str, etiquetas_inicio: list[str], etiquetas_fin: list[str]) -> str:
     inicio_regex = r"(?:%s)" % "|".join(re.escape(e) for e in etiquetas_inicio)
     fin_regex = r"(?:%s)" % "|".join(re.escape(e) for e in etiquetas_fin)
-
-    patron = rf"{inicio_regex}\s*:?\s*(.+?)(?=\s*{fin_regex}|\Z)"
+    patron = rf"{inicio_regex}\s*:?\s*(.+?)(?=\s*(?:{fin_regex})\s*:|\Z)"
     return buscar(texto, patron)
 
 
 def extraer_bloque_anotaciones(texto: str) -> str:
+    return extraer_bloque(
+        texto,
+        etiquetas_inicio=["ANOTACIONES", "ANOTACION"],
+        etiquetas_fin=[
+            "GRAVÁMENES",
+            "GRAVAMENES",
+            "OBSERVACIONES",
+            "PROPIETARIO",
+            "VALOR FISCAL",
+            "PLANO",
+            "ESTADO",
+            "FIN DE CONSULTA"
+        ]
+    )
+
+
+def extraer_cedula(texto: str) -> str:
     patrones = [
-        r"ANOTACIONES\s*:?\s*(.+)",
-        r"ANOTACION(?:ES)?\s*:?\s*(.+)",
+        r"CEDULA\s+JUR[IÍ]DICA\s*:?\s*([0-9]{1}[- ][0-9]{3}[- ][0-9]{6})",
+        r"C[ÉE]DULA\s+JUR[IÍ]DICA\s*:?\s*([0-9]{1}[- ][0-9]{3}[- ][0-9]{6})",
+        r"CEDULA\s+IDENTIDAD\s*:?\s*([0-9]{1,2}[- ][0-9]{4}[- ][0-9]{4})",
+        r"C[ÉE]DULA\s+IDENTIDAD\s*:?\s*([0-9]{1,2}[- ][0-9]{4}[- ][0-9]{4})",
+        r"C[ÉE]DULA\s*:?\s*([0-9]{1,2}[- ][0-9]{4}[- ][0-9]{4,6})",
+        r"IDENTIDAD\s*:?\s*([0-9]{1,2}[- ][0-9]{4}[- ][0-9]{4})",
+        r"([0-9]{1}[- ][0-9]{3}[- ][0-9]{6})",
+        r"([0-9]{1,2}[- ][0-9]{4}[- ][0-9]{4})",
     ]
 
     for patron in patrones:
-        valor = buscar(texto, patron)
-        if valor:
-            return valor
+        m = re.search(patron, texto, re.IGNORECASE)
+        if m:
+            return m.group(1).replace(" ", "-")
 
+    return ""
+
+
+def extraer_tipo_cedula(cedula: str) -> str:
+    if not cedula:
+        return ""
+    if re.fullmatch(r"\d-\d{3}-\d{6}", cedula):
+        return "JURIDICA"
+    if re.fullmatch(r"\d{1,2}-\d{4}-\d{4}", cedula):
+        return "FISICA"
     return ""
 
 
 def detectar_hipoteca(texto: str, anotaciones: str) -> tuple[str, str]:
     texto_total = f"{texto}\n{anotaciones}"
 
-    if re.search(r"\bH\s*I\s*P\s*O\s*T\s*E\s*C\s*A\b", texto_total, re.IGNORECASE):
-        detalle = buscar(
-            texto_total,
-            r"(HIPOTECA.+?)(?=\n[A-ZÁÉÍÓÚÑ ]{4,}:|\Z)"
-        )
-        if not detalle:
-            detalle = "Se detectó referencia a hipoteca."
-        return "SI", detalle
+    if not re.search(r"\bH\s*I\s*P\s*O\s*T\s*E\s*C\s*A\b", texto_total, re.IGNORECASE):
+        return "NO", ""
 
-    return "NO", ""
+    detalle = buscar_primero(texto_total, [
+        r"(HIPOTECA.+?)(?=\s*(?:ANOTACI[ÓO]N|ANOTACIONES|GRAV[ÁA]MENES|OBSERVACIONES|VALOR FISCAL|PROPIETARIO|$))",
+        r"(HIPOTECA.+?)(?=\n{2,}|\Z)",
+    ])
+
+    if not detalle:
+        detalle = "Se detectó referencia a hipoteca."
+
+    return "SI", detalle
 
 
-def extraer_cedula(texto: str) -> str:
-    patrones = [
-        r"CÉDULA\s+IDENTIDAD\s*:?\s*([0-9]{1,2}[- ][0-9]{4}[- ][0-9]{4})",
-        r"CÉDULA\s+JUR[IÍ]DICA\s*:?\s*([0-9]{1,3}[- ][0-9]{3}[- ][0-9]{6})",
-        r"CÉDULA\s*:?\s*([0-9]{1,3}[- ][0-9]{3,4}[- ][0-9]{4,6})",
-        r"IDENTIDAD\s*:?\s*([0-9]{1,3}[- ][0-9]{3,4}[- ][0-9]{4,6})",
+def limpiar_causa_adquisitiva(valor: str) -> str:
+    if not valor:
+        return ""
+
+    cortes = [
+        "FECHA DE INSCRIP",
+        "TOMO",
+        "ASIENTO",
+        "PRESENTACIÓN",
+        "PRESENTACION",
+        "ANOTACIONES",
+        "GRAVÁMENES",
+        "GRAVAMENES",
+        "OBSERVACIONES",
+        "VALOR FISCAL",
+        "PROPIETARIO",
     ]
 
-    valor = buscar_primero(texto, patrones)
-    return valor.replace(" ", "-") if valor else ""
+    valor_limpio = valor
+    for corte in cortes:
+        idx = valor_limpio.find(corte)
+        if idx != -1:
+            valor_limpio = valor_limpio[:idx].strip()
+
+    return limpiar_valor(valor_limpio)
 
 
 def extraer_datos(texto_original: str, nombre: str) -> dict:
-    texto = normalizar_texto(texto_original)
     texto_busqueda = normalizar_para_busqueda(texto_original)
 
     matricula = buscar_primero(texto_busqueda, [
@@ -162,7 +199,6 @@ def extraer_datos(texto_original: str, nombre: str) -> dict:
 
     derechos = buscar_primero(texto_busqueda, [
         r"DERECHO[S]?\s*:?\s*([0-9]+)",
-        r"DERECHO\s*:?\s*([0-9]+)",
     ])
 
     antecedentes = extraer_bloque(
@@ -176,10 +212,13 @@ def extraer_datos(texto_original: str, nombre: str) -> dict:
             "VALOR FISCAL",
             "PROPIETARIO",
             "CÉDULA",
+            "CEDULA",
             "CAUSA ADQUISITIVA",
             "FECHA DE INSCRIPCIÓN",
+            "FECHA DE INSCRIPCION",
             "ANOTACIONES",
             "GRAVÁMENES",
+            "GRAVAMENES",
             "OBSERVACIONES"
         ]
     )
@@ -194,31 +233,45 @@ def extraer_datos(texto_original: str, nombre: str) -> dict:
         etiquetas_inicio=["PROPIETARIO", "PROPIETARIA"],
         etiquetas_fin=[
             "CÉDULA",
+            "CEDULA",
             "CAUSA ADQUISITIVA",
             "FECHA DE INSCRIPCIÓN",
+            "FECHA DE INSCRIPCION",
+            "ESTIMACIÓN O PRECIO",
+            "ESTIMACION O PRECIO",
+            "DUEÑO DEL DOMINIO",
+            "DUENO DEL DOMINIO",
             "ESTADO CIVIL",
             "NACIONALIDAD",
             "DOMICILIO",
             "ANOTACIONES",
-            "GRAVÁMENES"
+            "GRAVÁMENES",
+            "GRAVAMENES"
         ]
     )
 
     cedula = extraer_cedula(texto_busqueda)
+    tipo_cedula = extraer_tipo_cedula(cedula)
 
-    causa_adquisitiva = extraer_bloque(
+    causa_adquisitiva_raw = extraer_bloque(
         texto_busqueda,
         etiquetas_inicio=["CAUSA ADQUISITIVA"],
         etiquetas_fin=[
             "FECHA DE INSCRIPCIÓN",
+            "FECHA DE INSCRIPCION",
             "TOMO",
             "ASIENTO",
             "PRESENTACIÓN",
+            "PRESENTACION",
             "ANOTACIONES",
             "GRAVÁMENES",
-            "OBSERVACIONES"
+            "GRAVAMENES",
+            "OBSERVACIONES",
+            "VALOR FISCAL",
+            "PROPIETARIO"
         ]
     )
+    causa_adquisitiva = limpiar_causa_adquisitiva(causa_adquisitiva_raw)
 
     fecha_inscripcion = buscar_primero(texto_busqueda, [
         r"FECHA DE INSCRIPCI[ÓO]N\s*:?\s*([0-9]{1,2}[-/][A-Z]{3}[-/][0-9]{4})",
@@ -239,6 +292,7 @@ def extraer_datos(texto_original: str, nombre: str) -> dict:
         "valor_fiscal": valor_fiscal,
         "propietario": propietario,
         "cedula": cedula,
+        "tipo_cedula": tipo_cedula,
         "fecha_inscripcion": fecha_inscripcion,
         "causa_adquisitiva": causa_adquisitiva,
         "anotaciones": anotaciones,
