@@ -8,7 +8,7 @@ import pytesseract
 
 st.set_page_config(page_title="Lector de Fincas PDF", layout="wide")
 
-st.title("📄 Lector de Fincas del Registro")
+st.title("Lector de Fincas del Registro")
 st.write(
     "Suba uno o varios PDFs del Registro de la Propiedad. "
     "La app extraerá la información y generará un archivo Excel automáticamente."
@@ -321,10 +321,9 @@ if uploaded_files:
             file.seek(0)
             texto = leer_pdf_texto(file)
 
-            if not texto:
-                st.warning("No se detectó texto. Aplicando OCR...")
-                file.seek(0)
-                texto = leer_pdf_ocr(file)
+          if not texto:
+    file.seek(0)
+    texto = leer_pdf_ocr(file)
 
             datos = extraer_datos(texto, file.name)
             resultados.append(datos)
