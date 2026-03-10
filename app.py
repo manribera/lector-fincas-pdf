@@ -8,7 +8,7 @@ import pytesseract
 
 st.set_page_config(page_title="Lector de Fincas PDF", layout="wide")
 
-st.title("📄 Lector de Fincas del Registro")
+st.title(" Lector de Fincas del Registro")
 st.write(
     "Suba uno o varios PDFs del Registro de la Propiedad. "
     "La app extraerá la información y generará un archivo Excel automáticamente."
