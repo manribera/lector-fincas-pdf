@@ -8,7 +8,7 @@ import pytesseract
 
 st.set_page_config(page_title="Lector de Fincas PDF", layout="wide")
 
-st.title("Lector de Fincas del Registro")
+st.title("📄 Lector de Fincas del Registro")
 st.write(
     "Suba uno o varios PDFs del Registro de la Propiedad. "
     "La app extraerá la información y generará un archivo Excel automáticamente."
@@ -40,14 +40,6 @@ def leer_pdf_ocr(file) -> str:
     for img in imagenes:
         texto += pytesseract.image_to_string(img, lang="eng") + "\n"
 
-    return texto.strip()
-
-
-def normalizar_texto(texto: str) -> str:
-    texto = texto.replace("\r", "\n")
-    texto = texto.replace("|", " ")
-    texto = re.sub(r"[ \t]+", " ", texto)
-    texto = re.sub(r"\n+", "\n", texto)
     return texto.strip()
 
 
@@ -321,9 +313,9 @@ if uploaded_files:
             file.seek(0)
             texto = leer_pdf_texto(file)
 
-          if not texto:
-    file.seek(0)
-    texto = leer_pdf_ocr(file)
+            if not texto:
+                file.seek(0)
+                texto = leer_pdf_ocr(file)
 
             datos = extraer_datos(texto, file.name)
             resultados.append(datos)
